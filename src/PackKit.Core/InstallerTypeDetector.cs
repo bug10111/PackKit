@@ -7,14 +7,20 @@ namespace PackKit.Core;
 /// </summary>
 public static class InstallerTypeDetector
 {
-    /// <summary>头部探测窗口字节长度（文件头 64KB 内做标识串扫描）。</summary>
-    public const int HeaderScanLength = 64 * 1024;
+    /// <summary>头部探测窗口字节长度（文件头 8MB 内做标识串扫描；NSIS/Inno 的特征串位于 PE 桩之后、压缩数据之前，实测均在头部近邻，8MB 覆盖各类加壳变体）。</summary>
+    public const int HeaderScanLength = 8 * 1024 * 1024;
 
     private static readonly byte[] MsiHeaderMagic = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+
+    private static readonly byte[] NsisStrongMarkerBytes = Encoding.ASCII.GetBytes("NullsoftInst");
 
     private static readonly byte[] NsisMarkerBytes = Encoding.ASCII.GetBytes("Nullsoft");
 
     private static readonly byte[] InnoMarkerBytes = Encoding.ASCII.GetBytes("Inno Setup");
+
+    private static readonly byte[] InstallShieldMarkerBytes = Encoding.ASCII.GetBytes("InstallShield");
+
+    private static readonly byte[] SquirrelMarkerBytes = Encoding.ASCII.GetBytes("Squirrel");
 
     /// <summary>
     /// 探测磁盘文件（探测 MSI 头魔数与 NSIS / Inno 标识串）。
@@ -71,12 +77,15 @@ public static class InstallerTypeDetector
             InstallerType.Nsis => "/S",
             InstallerType.Inno => "/VERYSILENT /NORESTART",
             InstallerType.Msi => "/qn /norestart",
+            InstallerType.InstallShield => "/s /v\"/qn\"",
+            InstallerType.Squirrel => "--silent",
             _ => string.Empty
         };
     }
 
     /// <summary>
-    /// 在头部窗口内按优先级判定安装器类型：MSI 复合文档魔数优先，其次 NSIS / Inno 标识串。
+    /// 在头部窗口内按优先级判定安装器类型：MSI 复合文档魔数优先，其次各安装器标识串
+    /// （NSIS 强特征 "NullsoftInst" 优先于弱特征 "Nullsoft"，弱特征单独出现可能是其他软件携带的字符串）。
     /// </summary>
     /// <param name="headerBytes">头部读取缓冲区。</param>
     /// <param name="headerLength">实际读到的字节数。</param>
@@ -94,8 +103,8 @@ public static class InstallerTypeDetector
 
         var window = headerBytes.AsSpan(0, headerLength);
 
-        // NSIS：firstheader 内含 "Nullsoft" 标识串
-        if (window.IndexOf(NsisMarkerBytes) >= 0)
+        // NSIS：firstheader 内固定含 "NullsoftInst" 魔数串（强特征）
+        if (window.IndexOf(NsisStrongMarkerBytes) >= 0)
         {
             return InstallerType.Nsis;
         }
@@ -104,6 +113,24 @@ public static class InstallerTypeDetector
         if (window.IndexOf(InnoMarkerBytes) >= 0)
         {
             return InstallerType.Inno;
+        }
+
+        // InstallShield：头部窗口内含 "InstallShield" 标识串
+        if (window.IndexOf(InstallShieldMarkerBytes) >= 0)
+        {
+            return InstallerType.InstallShield;
+        }
+
+        // Squirrel：Electron 系应用（Squirrel.Windows 打包）安装器内含 "Squirrel" 标识串
+        if (window.IndexOf(SquirrelMarkerBytes) >= 0)
+        {
+            return InstallerType.Squirrel;
+        }
+
+        // NSIS：弱特征兜底（部分变体 firstheader 被改写仅余 "Nullsoft" 字样）
+        if (window.IndexOf(NsisMarkerBytes) >= 0)
+        {
+            return InstallerType.Nsis;
         }
 
         return InstallerType.Unknown;

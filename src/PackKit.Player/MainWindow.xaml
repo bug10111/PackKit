@@ -9,7 +9,8 @@
                  MinWidth="640"
                  MinHeight="480"
                  WindowStartupLocation="CenterScreen"
-                 ExtendsContentIntoTitleBar="True">
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="None">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
@@ -68,13 +69,24 @@
                 <ui:ImageIcon Source="pack://application:,,,/PackKit.Player;component/Assets/sp.ico" />
             </ui:TitleBar.Icon>
             <ui:TitleBar.TrailingContent>
-                <TextBlock x:Name="ElevationBadge"
-                           Margin="0,0,8,0"
-                           FontSize="12"
-                           VerticalAlignment="Center">
-                    <Run x:Name="ElevationDot" Text="● " />
-                    <Run x:Name="ElevationText" Text="检测中" />
-                </TextBlock>
+                <StackPanel Orientation="Horizontal">
+                    <!-- 开源地址：项目主页导航（点击经系统默认浏览器打开） -->
+                    <ui:Button Content="GitHub ↗"
+                               Appearance="Transparent"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               FontSize="12"
+                               Click="OnGitHubClick"
+                               ToolTip="开源地址：github.com/bug10111/PackKit"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center" />
+                    <TextBlock x:Name="ElevationBadge"
+                               Margin="0,0,8,0"
+                               FontSize="12"
+                               VerticalAlignment="Center">
+                        <Run x:Name="ElevationDot" Text="● " />
+                        <Run x:Name="ElevationText" Text="检测中" />
+                    </TextBlock>
+                </StackPanel>
             </ui:TitleBar.TrailingContent>
         </ui:TitleBar>
 

@@ -15,5 +15,11 @@ public enum InstallerType
     Inno,
 
     /// <summary>Microsoft Windows Installer（MSI）安装包，由成品端经 msiexec /i 承载执行。</summary>
-    Msi
+    Msi,
+
+    /// <summary>InstallShield 安装包（默认静默参数 /s /v"/qn"）。</summary>
+    InstallShield,
+
+    /// <summary>Squirrel 安装包（Electron 系应用常用，默认静默参数 --silent）。</summary>
+    Squirrel
 }

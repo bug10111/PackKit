@@ -134,6 +134,8 @@ public sealed class PackageEntryViewModel : ObservableObject
                 InstallerType.Nsis => "NSIS",
                 InstallerType.Inno => "Inno Setup",
                 InstallerType.Msi => "MSI",
+                InstallerType.InstallShield => "InstallShield",
+                InstallerType.Squirrel => "Squirrel",
                 _ => "未知"
             };
         }

@@ -61,6 +61,9 @@ public static class PackagingService
     /// <summary>图标未嵌入的透出原因（实证结论见类型注释）。</summary>
     public const string IconSkipReasonText =
         "图标嵌入暂不可用：单文件自包含壳经资源替换会丢失运行时 bundle（已实证），本次按无图标打包。";
+
+    /// <summary>成品 exe 体积硬上限（字节）：Windows 加载器无法执行达到 2^32 字节的可执行文件（实测 4,294,967,296 字节即报「无法在你的电脑上运行」，2^32−1 为最后合法值）。</summary>
+    public const long MaxPackedExeBytes = 4_294_967_295;
     /// <summary>
     /// 校验打包请求并写出成品 exe。
     /// </summary>
@@ -87,6 +90,14 @@ public static class PackagingService
             progress,
             cancellationToken);
 
+        // 写出后精确兜底：zip 压缩率波动可能使实际体积超出预估，超限成品在任意机器上都无法运行，删除本次产物并以可读错误说明
+        if (File.Exists(request.OutputExePath) && new FileInfo(request.OutputExePath).Length > MaxPackedExeBytes)
+        {
+            File.Delete(request.OutputExePath);
+            throw new PackagingValidationException(
+                "成品实际体积超过 Windows 单个可执行文件 4GiB 硬上限（超限 exe 无法运行），已删除本次产物。请移除部分安装包（优先移除体积最大的几项）后重新打包。");
+        }
+
         var iconRequested = !string.IsNullOrWhiteSpace(request.IconPath);
         return new PackagingOutcome(request.OutputExePath, footer, iconRequested, iconRequested ? IconSkipReasonText : null);
     }
@@ -110,6 +121,23 @@ public static class PackagingService
         if (string.IsNullOrWhiteSpace(request.ShellExePath) || !File.Exists(request.ShellExePath))
         {
             throw new PackagingValidationException($"壳模板文件不存在：{request.ShellExePath}");
+        }
+
+        // 成品体积预估硬闸：壳实长 + 各源文件实长为保守上界（zip 压缩只减不增），超限直接拒绝并引导拆分，
+        // 避免用户等待完整打包后才在目标机上发现成品无法运行
+        var shellBytes = new FileInfo(request.ShellExePath).Length;
+        long sourceBytes = 0;
+        foreach (var entry in request.Entries)
+        {
+            sourceBytes += new FileInfo(entry.SourceFilePath).Length;
+        }
+
+        if (shellBytes + sourceBytes > MaxPackedExeBytes)
+        {
+            var estimateGigaBytes = (shellBytes + sourceBytes) / 1073741824.0;
+            throw new PackagingValidationException(
+                $"预计成品体积 {estimateGigaBytes:F2} GB，超过 Windows 单个可执行文件 4GiB 硬上限" +
+                "（超限 exe 在任何电脑上都无法运行）。请把安装包拆分成多个装机包分别打包。");
         }
 
         if (!string.IsNullOrWhiteSpace(request.IconPath) && !File.Exists(request.IconPath))

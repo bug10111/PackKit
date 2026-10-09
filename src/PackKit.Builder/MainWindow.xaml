@@ -26,7 +26,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- 标题条：窗口标题 + 工程操作按钮（新建/打开/保存）+ 系统三键；Icon 经 ImageIcon 显式落标题栏（TitleBar.Icon 为 IconElement 类型，字符串赋值不渲染） -->
+        <!-- 标题条：窗口标题 + 开源地址链接 + 系统三键（工程随数据目录自动保存，无手动工程按钮）；Icon 经 ImageIcon 显式落标题栏（TitleBar.Icon 为 IconElement 类型，字符串赋值不渲染） -->
         <ui:TitleBar Grid.Row="0"
                      Title="装机包制作工具"
                      Padding="8,4">
@@ -35,26 +35,20 @@
             </ui:TitleBar.Icon>
             <ui:TitleBar.TrailingContent>
                 <StackPanel Orientation="Horizontal">
-                    <ui:Button Content="新建工程"
+                    <!-- 开源地址：项目主页导航（点击经系统默认浏览器打开） -->
+                    <ui:Button Content="GitHub ↗"
                                Appearance="Transparent"
-                               Icon="{ui:SymbolIcon Add24}"
-                               Click="OnNewProjectClick"
-                               Margin="0,0,4,0" />
-                    <ui:Button Content="打开工程"
-                               Appearance="Transparent"
-                               Icon="{ui:SymbolIcon FolderOpen24}"
-                               Click="OnOpenProjectClick"
-                               Margin="0,0,4,0" />
-                    <ui:Button Content="保存工程"
-                               Appearance="Transparent"
-                               Icon="{ui:SymbolIcon Save24}"
-                               Click="OnSaveProjectClick"
-                               Margin="0,0,8,0" />
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               FontSize="12"
+                               Click="OnGitHubClick"
+                               ToolTip="开源地址：github.com/bug10111/PackKit"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center" />
                 </StackPanel>
             </ui:TitleBar.TrailingContent>
         </ui:TitleBar>
 
-        <!-- 安装包工具条：添加入口与拖拽提示 -->
+        <!-- 安装包工具条：添加入口、分组范围下拉与拖拽提示 -->
         <Grid Grid.Row="1" Margin="16,8,16,8">
             <StackPanel Orientation="Horizontal">
                 <ui:Button Content="＋添加安装包"
@@ -66,10 +60,130 @@
                            Icon="{ui:SymbolIcon FolderAdd24}"
                            Click="OnAddFolderClick"
                            Margin="8,0,0,0" />
-                <ui:Button Content="分组管理"
+                <!-- 分组下拉：按钮文案即当前分组范围（「全部」或某分组），点开即分组管理面板（Button+Popup 标准原语，主题库 DropDownButton 实测点击不弹层） -->
+                <ui:Button x:Name="GroupMenuButton"
+                           Content="{Binding SelectedGroupDisplayText, Mode=OneWay}"
                            Appearance="Secondary"
                            Icon="{ui:SymbolIcon Group24}"
-                           Click="OnManageGroupsClick"
+                           Margin="8,0,0,0"
+                           Click="OnGroupMenuButtonClick" />
+                <Popup x:Name="GroupMenuPopup"
+                       PlacementTarget="{Binding ElementName=GroupMenuButton}"
+                       Placement="Bottom"
+                       StaysOpen="False"
+                       AllowsTransparency="True"
+                       PopupAnimation="Fade"
+                       Closed="OnGroupMenuPopupClosed">
+                    <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="8"
+                            Margin="0,4,8,8">
+                        <ScrollViewer MaxHeight="480" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Width="272">
+                                    <!-- 全部：置顶筛选项，对勾图标冗余标注当前范围 -->
+                                    <ui:Button HorizontalAlignment="Stretch"
+                                               HorizontalContentAlignment="Left"
+                                               Click="OnGroupFilterAllClick"
+                                               ToolTip="显示全部安装包">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0"
+                                                           Symbol="Checkmark24"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           Visibility="{Binding IsAllGroupsFilter, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            <TextBlock Grid.Column="1" Text="全部" />
+                                        </Grid>
+                                    </ui:Button>
+                                    <!-- 分组行：名称即筛选入口，行内 ✎ 改名（沿用重名校验）、× 删除（沿用确认与回落） -->
+                                    <ItemsControl x:Name="GroupMenuList"
+                                                  ItemsSource="{Binding GroupMenuItems, Mode=OneWay}"
+                                                  Margin="0,4,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <Grid x:Name="GroupRowView">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="20" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <ui:SymbolIcon Grid.Column="0"
+                                                                       Symbol="Checkmark24"
+                                                                       HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center"
+                                                                       Visibility="{Binding IsSelected, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                        <ui:Button Grid.Column="1"
+                                                                   Content="{Binding Name, Mode=OneWay}"
+                                                                   HorizontalAlignment="Stretch"
+                                                                   HorizontalContentAlignment="Left"
+                                                                   Click="OnGroupFilterItemClick"
+                                                                   ToolTip="只显示该分组的安装包" />
+                                                        <ui:Button Grid.Column="2"
+                                                                   Icon="{ui:SymbolIcon Edit24}"
+                                                                   Appearance="Transparent"
+                                                                   Click="OnGroupMenuRenameClick"
+                                                                   ToolTip="重命名分组"
+                                                                   Margin="4,0,0,0" />
+                                                        <ui:Button Grid.Column="3"
+                                                                   Icon="{ui:SymbolIcon Dismiss24}"
+                                                                   Appearance="Danger"
+                                                                   Click="OnGroupMenuDeleteClick"
+                                                                   ToolTip="删除分组"
+                                                                   Margin="4,0,0,0" />
+                                                    </Grid>
+                                                    <StackPanel x:Name="GroupRowEdit"
+                                                                Orientation="Horizontal"
+                                                                Visibility="Collapsed">
+                                                        <ui:TextBox Width="160"
+                                                                    MaxLength="50"
+                                                                    Text="{Binding EditName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                    KeyDown="OnGroupRenameBoxKeyDown"
+                                                                    IsVisibleChanged="OnGroupRenameBoxIsVisibleChanged" />
+                                                        <ui:Button Icon="{ui:SymbolIcon Checkmark24}"
+                                                                   Click="OnGroupMenuRenameConfirmClick"
+                                                                   ToolTip="确认重命名"
+                                                                   Margin="4,0,0,0" />
+                                                    </StackPanel>
+                                                </Grid>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding IsEditing, Mode=OneWay}" Value="True">
+                                                        <Setter TargetName="GroupRowView" Property="Visibility" Value="Collapsed" />
+                                                        <Setter TargetName="GroupRowEdit" Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Separator Margin="0,8,0,4" />
+                                    <!-- 新建分组：常驻输入框 + 「添加」按钮（Enter 同效），成功后自动选中为新筛选范围 -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <ui:TextBox x:Name="CreateGroupNameBox"
+                                                    Width="160"
+                                                    MaxLength="50"
+                                                    PlaceholderText="输入新分组名"
+                                                    KeyDown="OnGroupCreateBoxKeyDown" />
+                                        <ui:Button Content="添加"
+                                                   Icon="{ui:SymbolIcon Add24}"
+                                                   Appearance="Secondary"
+                                                   Click="OnGroupCreateConfirmClick"
+                                                   ToolTip="创建分组并选中为筛选范围"
+                                                   Margin="4,0,0,0" />
+                                    </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Popup>
+                <ui:Button Content="设置"
+                           Appearance="Secondary"
+                           Icon="{ui:SymbolIcon Settings24}"
+                           Click="OnSettingsClick"
                            Margin="8,0,0,0" />
             </StackPanel>
             <TextBlock Text="支持把安装包文件直接拖进下方列表"
@@ -79,10 +193,10 @@
                        HorizontalAlignment="Right" />
         </Grid>
 
-        <!-- 安装包列表：空态占位与拖拽落点 -->
+        <!-- 安装包列表：分组范围由工具条分组下拉控制，空态占位与拖拽落点 -->
         <Grid Grid.Row="2" Margin="16,0,16,0">
             <DataGrid x:Name="PackagesGrid"
-                      ItemsSource="{Binding Items}"
+                      ItemsSource="{Binding ItemsView, Mode=OneWay}"
                       SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
                       AutoGenerateColumns="False"
                       CanUserAddRows="False"

@@ -29,11 +29,11 @@ public sealed class InstallItemViewModel : INotifyPropertyChanged
     private Brush statusForeground = PendingForeground;
     private Brush statusBackground = PendingBackground;
     private string failureReason = string.Empty;
-    private bool isChecked = true;
+    private bool isChecked = false;
     private bool isSelectable = true;
 
     /// <summary>
-    /// 以清单条目初始化行视图模型（默认勾选，与安装主流程「勾选项」语义一致）。
+    /// 以清单条目初始化行视图模型（默认不勾选，由用户自行挑选要安装的软件）。
     /// </summary>
     /// <param name="source">对应的清单条目（不可为空）。</param>
     public InstallItemViewModel(PackItem source)
@@ -82,7 +82,7 @@ public sealed class InstallItemViewModel : INotifyPropertyChanged
         get { return status == InstallStatus.Failed ? failureReason : string.Empty; }
     }
 
-    /// <summary>勾选状态（默认勾选；过滤仅影响显示、不影响勾选）。</summary>
+    /// <summary>勾选状态（默认不勾选，由用户挑选；过滤仅影响显示、不影响勾选）。</summary>
     public bool IsChecked
     {
         get { return isChecked; }

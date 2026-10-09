@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using PackKit.Core;
 
 namespace PackKit.Player.Infrastructure;
 
 /// <summary>
-/// 调试输出日志：统一时间戳与级别格式写入调试通道，承载安装流程与异常留痕（无文件落盘）。
+/// 调试输出日志：统一时间戳与级别格式写入调试通道，同时镜像到文件日志（C:\simple\PackKit\logs\），
+/// 承载安装流程与异常留痕（装机现场排障取证面）。
 /// </summary>
 internal static class MemoryLog
 {
@@ -27,7 +29,7 @@ internal static class MemoryLog
     }
 
     /// <summary>
-    /// 按统一格式拼装一行日志并写入调试通道。
+    /// 按统一格式拼装一行日志写入调试通道，并镜像到文件日志组件。
     /// </summary>
     /// <param name="level">日志级别标记。</param>
     /// <param name="message">日志内容。</param>
@@ -41,5 +43,13 @@ internal static class MemoryLog
         }
 
         Debug.WriteLine(line);
+        if (level == "ERROR")
+        {
+            AppLogger.Error(message, exception);
+        }
+        else
+        {
+            AppLogger.Info(message);
+        }
     }
 }

@@ -18,6 +18,13 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
+    <!-- 下拉按钮与按钮同档对齐：工具条分组下拉与相邻按钮高度一致 -->
+    <Style TargetType="ui:DropDownButton" BasedOn="{StaticResource {x:Type ui:DropDownButton}}">
+        <Setter Property="Height" Value="32" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
     <!-- 表单控件与按钮同行高度对齐：文本输入框与按钮同高，保证同一表单行内对齐 -->
     <Style TargetType="ui:TextBox" BasedOn="{StaticResource {x:Type ui:TextBox}}">
         <Setter Property="Height" Value="32" />
@@ -27,6 +34,12 @@
     <!-- 下拉框与按钮/输入框同档对齐：表单行内控件高度一致 -->
     <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
         <Setter Property="Height" Value="32" />
+    </Style>
+
+    <!-- 下拉项高度与内边距：修复下拉项过矮致 14px 正文字体显示不全（MinHeight 对齐控件 32 档，上下内边距按 4 档基准取 6 保证字形完整） -->
+    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="12,6" />
     </Style>
 
 </ResourceDictionary>

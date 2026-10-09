@@ -27,13 +27,11 @@ public static class ProjectFileService
     private static readonly JsonSerializerOptions SerializerOptions = CreateOptions();
 
     /// <summary>
-    /// 保存工程到指定文件（UTF-8 覆盖写）。
+    /// 保存工程到指定文件（同步 UTF-8 覆盖写；工程文件为小体积 JSON，供工程随数据目录自动保存路径使用）。
     /// </summary>
     /// <param name="project">待保存工程。</param>
     /// <param name="filePath">目标文件路径。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>异步任务。</returns>
-    public static async Task SaveAsync(BuilderProject project, string filePath, CancellationToken cancellationToken)
+    public static void Save(BuilderProject project, string filePath)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
@@ -45,7 +43,7 @@ public static class ProjectFileService
         }
 
         var json = JsonSerializer.Serialize(project, SerializerOptions);
-        await File.WriteAllTextAsync(filePath, json, cancellationToken);
+        File.WriteAllText(filePath, json);
     }
 
     /// <summary>

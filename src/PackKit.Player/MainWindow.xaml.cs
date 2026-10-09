@@ -350,11 +350,16 @@ public partial class MainWindow : FluentWindow
         {
             var extractedPath = await PayloadReader.ExtractItemAsync(exePath!, target.Source, extractDirectory, token);
             var exitCode = await RunInstallerAsync(target.Source, extractedPath, token);
-            if (exitCode == 0)
+
+            // 安装器成功退出码白名单：0=成功；3010/1641=安装成功但需要重启（MSI 标准语义，
+            // 部分安装器成功时也返回非零码，按「实际装好即成功」口径放行并提示重启）
+            if (exitCode == 0 || exitCode == 3010 || exitCode == 1641)
             {
                 target.ApplyStatus(InstallStatus.Succeeded);
-                MemoryLog.Info($"「{target.DisplayName}」安装完成（退出码 0）。");
-                StatusLine.Text = $"✓ {target.DisplayName} 安装完成";
+                MemoryLog.Info($"「{target.DisplayName}」安装完成（退出码 {exitCode}）。");
+                StatusLine.Text = exitCode == 0
+                    ? $"✓ {target.DisplayName} 安装完成"
+                    : $"✓ {target.DisplayName} 安装完成（建议重启电脑后生效）";
                 return;
             }
 
@@ -586,6 +591,19 @@ public partial class MainWindow : FluentWindow
         InstallButton.Visibility = Visibility.Collapsed;
         StatusLine.Visibility = Visibility.Collapsed;
         EmptyStatePanel.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// 打开项目开源地址（经系统默认浏览器导航到 GitHub 仓库主页）。
+    /// </summary>
+    /// <param name="sender">事件来源。</param>
+    /// <param name="e">事件参数。</param>
+    private void OnGitHubClick(object sender, RoutedEventArgs e)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://github.com/bug10111/PackKit")
+        {
+            UseShellExecute = true
+        });
     }
 
     /// <summary>

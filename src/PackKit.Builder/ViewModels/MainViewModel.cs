@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Windows.Data;
 using System.Windows.Input;
 using PackKit.Builder.Models;
 using PackKit.Builder.Services;
@@ -16,6 +18,9 @@ public sealed class MainViewModel : ObservableObject
 {
     private readonly string desktopDirectory;
 
+    /// <summary>安装包条目集合的列表视图（承载分组范围过滤；与 Items 同源，保存与打包始终消费全量集合）。</summary>
+    private readonly ICollectionView itemsView;
+
     private string title = string.Empty;
 
     private string iconPath = string.Empty;
@@ -25,6 +30,8 @@ public sealed class MainViewModel : ObservableObject
     private string outputExePath = string.Empty;
 
     private PackageEntryViewModel? selectedItem;
+
+    private PackGroup? selectedGroup;
 
     private bool isBusy;
 
@@ -83,6 +90,14 @@ public sealed class MainViewModel : ObservableObject
         Items = new ObservableCollection<PackageEntryViewModel>();
         Items.CollectionChanged += (_, _) => RefreshDerivedState();
         Groups = new ObservableCollection<PackGroup>();
+        GroupMenuItems = new ObservableCollection<GroupMenuItemViewModel>();
+
+        // 分组集合任何增删移动都直接映射为下拉面板行集合重建（行包装负责承载界面态）
+        Groups.CollectionChanged += (_, _) => RebuildGroupMenuItems();
+
+        // 列表过滤视图与集合同源建立：过滤语义 = 选中分组范围（null 表示「全部」）
+        itemsView = CollectionViewSource.GetDefaultView(Items);
+        itemsView.Filter = FiltersEntryBySelectedGroup;
 
         MoveUpCommand = new RelayCommand(_ => MoveSelected(-1), _ => CanMoveSelected(-1));
         MoveDownCommand = new RelayCommand(_ => MoveSelected(1), _ => CanMoveSelected(1));
@@ -111,8 +126,14 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>安装包条目有序集合。</summary>
     public ObservableCollection<PackageEntryViewModel> Items { get; }
 
-    /// <summary>软件分组有序集合（顺序即创建顺序，供分组管理对话框与打包组装消费）。</summary>
+    /// <summary>列表过滤视图（与 Items 同源；筛选语义由选中分组范围决定，DataGrid 绑定此视图）。</summary>
+    public ICollectionView ItemsView => itemsView;
+
+    /// <summary>软件分组有序集合（顺序即创建顺序，供分组下拉面板与打包组装消费）。</summary>
     public ObservableCollection<PackGroup> Groups { get; }
+
+    /// <summary>分组下拉面板行集合（由 Groups 派生，「全部」项为界面固定首项不在本集合内）。</summary>
+    public ObservableCollection<GroupMenuItemViewModel> GroupMenuItems { get; }
 
     /// <summary>成品标题（打包时写入清单，输出文件名默认随之生成）。</summary>
     public string Title
@@ -174,6 +195,36 @@ public sealed class MainViewModel : ObservableObject
         get => selectedItem;
         set => SetProperty(ref selectedItem, value);
     }
+
+    /// <summary>
+    /// 分组下拉当前选中的分组范围：null 表示「全部」（列表显示全部条目，新添加的安装包保持未分组）；
+    /// 选中某分组时列表只显示该分组条目，新添加的安装包自动归入该分组。
+    /// </summary>
+    public PackGroup? SelectedGroup
+    {
+        get => selectedGroup;
+        set
+        {
+            if (SetProperty(ref selectedGroup, value))
+            {
+                OnPropertyChanged(nameof(SelectedGroupDisplayText));
+                OnPropertyChanged(nameof(IsAllGroupsFilter));
+                UpdateGroupMenuSelection();
+                RefreshItemsView();
+            }
+        }
+    }
+
+    /// <summary>分组下拉按钮展示文本（按钮文案即当前分组范围）。</summary>
+    public string SelectedGroupDisplayText => SelectedGroup is { } selected ? $"分组：{selected.Name}" : "分组：全部";
+
+    /// <summary>当前分组范围是否为「全部」（下拉面板「全部」项的选中标注）。</summary>
+    public bool IsAllGroupsFilter => SelectedGroup is null;
+
+    /// <summary>
+    /// 最近一次批量添加中被跳过的文件数（每次 AddPackageFiles 收尾重置；供紧随其后的归组反馈把跳过信息并入文案，防止跳过警告被归组结果反馈覆盖）。
+    /// </summary>
+    public int LastAddSkippedCount { get; private set; }
 
     /// <summary>是否正在打包（打包期间禁用全部变更动作与打包按钮防重复提交）。</summary>
     public bool IsBusy
@@ -289,6 +340,8 @@ public sealed class MainViewModel : ObservableObject
             entry.GroupId = newGroupId;
             entry.GroupName = ResolveGroupName(newGroupId);
             MarkDirty();
+            // 条目换组后按当前分组范围刷新过滤视图（条目可能移入或移出当前范围）
+            RefreshItemsView();
             return true;
         }
 
@@ -355,14 +408,23 @@ public sealed class MainViewModel : ObservableObject
         target.Name = newName.Trim();
         SyncEntryGroupName(target);
         MarkDirty();
+        // PackGroup 为 Core 冻结契约无属性通知：改名后需重建下拉面板行并刷新按钮文案与面板选中标注
+        RebuildGroupMenuItems();
+        OnPropertyChanged(nameof(SelectedGroupDisplayText));
     }
 
     /// <summary>
-    /// 删除分组：其下安装包回落为未分组（不删包），删除确认提示由管理界面在调用前给出。
+    /// 删除分组：其下安装包回落为未分组（不删包），删除确认提示由下拉面板在调用前给出；
+    /// 被删分组正处于筛选范围时同步回落为「全部」。
     /// </summary>
     /// <param name="groupId">目标分组唯一标识。</param>
     public void DeleteGroup(string groupId)
     {
+        if (selectedGroup is not null && string.Equals(selectedGroup.Id, groupId, StringComparison.Ordinal))
+        {
+            SelectedGroup = null;
+        }
+
         for (var index = Groups.Count - 1; index >= 0; index--)
         {
             if (!string.Equals(Groups[index].Id, groupId, StringComparison.Ordinal))
@@ -383,33 +445,8 @@ public sealed class MainViewModel : ObservableObject
             }
         }
 
-        MarkDirty();
-    }
-
-    /// <summary>
-    /// 移动分组顺序（-1 上移，1 下移；越界或分组不存在时不动作）。
-    /// </summary>
-    /// <param name="groupId">目标分组唯一标识。</param>
-    /// <param name="offset">移动方向（-1 上移，1 下移）。</param>
-    public void MoveGroup(string groupId, int offset)
-    {
-        var currentIndex = -1;
-        for (var index = 0; index < Groups.Count; index++)
-        {
-            if (string.Equals(Groups[index].Id, groupId, StringComparison.Ordinal))
-            {
-                currentIndex = index;
-                break;
-            }
-        }
-
-        var targetIndex = currentIndex + offset;
-        if (currentIndex < 0 || targetIndex < 0 || targetIndex >= Groups.Count)
-        {
-            return;
-        }
-
-        Groups.Move(currentIndex, targetIndex);
+        // 回落条目按当前分组范围刷新过滤视图（被删分组的条目可能移出当前范围）
+        RefreshItemsView();
         MarkDirty();
     }
 
@@ -433,29 +470,16 @@ public sealed class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 重置为全新工程（清空分组、列表与成品设置，壳模板重新按约定定位）。
-    /// </summary>
-    public void ResetProject()
-    {
-        title = string.Empty;
-        iconPath = string.Empty;
-        Groups.Clear();
-        Items.Clear();
-        SelectedItem = null;
-        ApplyNewProjectDefaults();
-        MarkClean();
-        OnPropertyChanged(nameof(Title));
-        OnPropertyChanged(nameof(IconPath));
-    }
-
-    /// <summary>
-    /// 批量添加安装包文件：入列时探测安装器类型并预填默认静默参数，同文件去重，类型受限与重复的文件跳过并向用户明示。
+    /// 批量添加安装包文件：入列时探测安装器类型并预填默认静默参数，同文件去重，类型受限与重复的文件跳过并向用户明示；
+    /// 返回本次实际入列的条目，供调用方按归组双通道落位。
     /// </summary>
     /// <param name="filePaths">候选文件路径集合。</param>
-    public void AddPackageFiles(IEnumerable<string> filePaths)
+    /// <returns>本次实际入列的条目集合（跳过的不含在内）。</returns>
+    public IReadOnlyList<PackageEntryViewModel> AddPackageFiles(IEnumerable<string> filePaths)
     {
         ArgumentNullException.ThrowIfNull(filePaths);
 
+        var addedEntries = new List<PackageEntryViewModel>();
         var addedCount = 0;
         var skippedCount = 0;
         foreach (var filePath in filePaths)
@@ -504,17 +528,20 @@ public sealed class MainViewModel : ObservableObject
                 ? IconExtractor.ExtractIconPngBase64(fullPath)
                 : null;
 
-            Items.Add(new PackageEntryViewModel(
+            var addedEntry = new PackageEntryViewModel(
                 Guid.NewGuid().ToString("D"),
                 Path.GetFileNameWithoutExtension(fullPath),
                 fullPath,
                 installerType,
                 InstallerTypeDetector.GetDefaultSilentArgs(installerType),
                 sizeBytes,
-                iconPng));
+                iconPng);
+            Items.Add(addedEntry);
+            addedEntries.Add(addedEntry);
             addedCount++;
         }
 
+        LastAddSkippedCount = skippedCount;
         if (addedCount > 0)
         {
             MarkDirty();
@@ -528,19 +555,22 @@ public sealed class MainViewModel : ObservableObject
         {
             CloseFeedback();
         }
+
+        return addedEntries;
     }
 
     /// <summary>
-    /// 添加整个文件夹（取该文件夹顶层的 *.exe 与 *.msi，不递归子目录）。
+    /// 添加整个文件夹（取该文件夹顶层的 *.exe 与 *.msi，不递归子目录），返回本次实际入列的条目。
     /// </summary>
     /// <param name="folderPath">目标文件夹路径。</param>
-    public void AddPackagesFromFolder(string folderPath)
+    /// <returns>本次实际入列的条目集合。</returns>
+    public IReadOnlyList<PackageEntryViewModel> AddPackagesFromFolder(string folderPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folderPath);
         if (!Directory.Exists(folderPath))
         {
             ShowFeedback(InfoBarSeverity.Error, "文件夹不存在", folderPath);
-            return;
+            return Array.Empty<PackageEntryViewModel>();
         }
 
         var packageFiles = new List<string>();
@@ -555,7 +585,31 @@ public sealed class MainViewModel : ObservableObject
         }
 
         packageFiles.Sort(StringComparer.OrdinalIgnoreCase);
-        AddPackageFiles(packageFiles);
+        return AddPackageFiles(packageFiles);
+    }
+
+    /// <summary>
+    /// 把一批新添加的条目归入指定分组（归组双通道的落位点；null 表示保持未分组）。
+    /// </summary>
+    /// <param name="entries">待归组的条目集合。</param>
+    /// <param name="groupId">目标分组唯一标识；null 表示未分组。</param>
+    public void AssignEntriesToGroup(IReadOnlyList<PackageEntryViewModel> entries, string? groupId)
+    {
+        if (entries.Count == 0)
+        {
+            return;
+        }
+
+        var groupName = ResolveGroupName(groupId);
+        foreach (var entry in entries)
+        {
+            entry.GroupId = groupId;
+            entry.GroupName = groupName;
+        }
+
+        // 新加条目以未分组态入列时会被分组过滤视图排除，归组后需刷新视图保证其在当前范围内可见
+        RefreshItemsView();
+        MarkDirty();
     }
 
     /// <summary>
@@ -587,13 +641,28 @@ public sealed class MainViewModel : ObservableObject
             var installerType = Enum.TryParse<InstallerType>(projectItem.InstallerType, ignoreCase: true, out var parsedType)
                 ? parsedType
                 : InstallerType.Unknown;
-            var sizeBytes = File.Exists(projectItem.SourceFilePath) ? new FileInfo(projectItem.SourceFilePath).Length : 0;
+            var sourceExists = File.Exists(projectItem.SourceFilePath);
+            var sizeBytes = sourceExists ? new FileInfo(projectItem.SourceFilePath).Length : 0;
+            var silentArgs = projectItem.SilentArgs;
+
+            // 识别器升级后自动重探：旧工程识别为 unknown 的条目（源文件在场时）按新特征重新识别并补默认静默参数，
+            // 用户已手填的参数不覆盖
+            if (installerType == InstallerType.Unknown && sourceExists)
+            {
+                var redetectedType = InstallerTypeDetector.Detect(projectItem.SourceFilePath);
+                if (redetectedType != InstallerType.Unknown)
+                {
+                    installerType = redetectedType;
+                    silentArgs = InstallerTypeDetector.GetDefaultSilentArgs(redetectedType);
+                }
+            }
+
             Items.Add(new PackageEntryViewModel(
                 projectItem.Id,
                 projectItem.Name,
                 projectItem.SourceFilePath,
                 installerType,
-                projectItem.SilentArgs,
+                silentArgs,
                 sizeBytes,
                 projectItem.IconPng,
                 projectItem.GroupId,
@@ -601,6 +670,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         SelectedItem = null;
+        SelectedGroup = null;
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(IconPath));
         OnPropertyChanged(nameof(ShellExePath));
@@ -610,12 +680,10 @@ public sealed class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 保存当前工程到指定文件。
+    /// 发起打包（校验 → 组装 → 写出，进度回调驱动进度条；期间界面进入忙态防重复提交）。
     /// </summary>
-    /// <param name="filePath">工程文件路径。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>异步任务。</returns>
-    public async Task SaveProjectToFileAsync(string filePath, CancellationToken cancellationToken)
+    /// <returns>工程实例。</returns>
+    private BuilderProject BuildProject()
     {
         var project = new BuilderProject
         {
@@ -644,9 +712,26 @@ public sealed class MainViewModel : ObservableObject
             });
         }
 
-        await ProjectFileService.SaveAsync(project, filePath, cancellationToken);
-        MarkClean();
-        ShowFeedback(InfoBarSeverity.Informational, "工程已保存", filePath);
+        return project;
+    }
+
+    /// <summary>工程自动保存文件路径（固定锚定数据目录，随数据目录迁移与备份）。</summary>
+    public static string AutoProjectFilePath => Path.Combine(DataDirectoryService.CurrentRoot, "project.packkit.json");
+
+    /// <summary>
+    /// 工程随数据目录自动保存（静默：失败仅写日志，不中断主流程、不弹窗）。
+    /// </summary>
+    public void SaveProjectAuto()
+    {
+        try
+        {
+            ProjectFileService.Save(BuildProject(), AutoProjectFilePath);
+            MarkClean();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("工程自动保存失败。", ex);
+        }
     }
 
     /// <summary>
@@ -723,6 +808,26 @@ public sealed class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 以成功级别展示反馈条（归组结果等正向反馈）。
+    /// </summary>
+    /// <param name="title">反馈标题。</param>
+    /// <param name="message">反馈内容。</param>
+    public void ShowSuccess(string title, string message)
+    {
+        ShowFeedback(InfoBarSeverity.Success, title, message);
+    }
+
+    /// <summary>
+    /// 以提示级别展示反馈条（不构成成功或错误的操作结论）。
+    /// </summary>
+    /// <param name="title">反馈标题。</param>
+    /// <param name="message">反馈内容。</param>
+    public void ShowInformational(string title, string message)
+    {
+        ShowFeedback(InfoBarSeverity.Informational, title, message);
+    }
+
+    /// <summary>
     /// 展示反馈条。
     /// </summary>
     /// <param name="severity">严重级别。</param>
@@ -747,11 +852,12 @@ public sealed class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 标记工程出现未保存变更。
+    /// 标记工程出现未保存变更，并立即随数据目录自动保存（静默，失败仅落日志）。
     /// </summary>
     private void MarkDirty()
     {
         IsDirty = true;
+        SaveProjectAuto();
     }
 
     /// <summary>
@@ -946,6 +1052,56 @@ public sealed class MainViewModel : ObservableObject
                 entry.GroupName = group.Name;
             }
         }
+    }
+
+    /// <summary>
+    /// 按分组创建顺序重建下拉面板行集合（ Groups 增删移动与改名后调用），并同步行选中标注。
+    /// </summary>
+    private void RebuildGroupMenuItems()
+    {
+        GroupMenuItems.Clear();
+        foreach (var group in Groups)
+        {
+            GroupMenuItems.Add(new GroupMenuItemViewModel(group));
+        }
+
+        UpdateGroupMenuSelection();
+    }
+
+    /// <summary>
+    /// 把当前分组范围同步标注到下拉面板各行（选中标注以对勾图标冗余呈现）。
+    /// </summary>
+    private void UpdateGroupMenuSelection()
+    {
+        foreach (var row in GroupMenuItems)
+        {
+            row.IsSelected = SelectedGroup is { } selected
+                && string.Equals(row.Group.Id, selected.Id, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// 刷新列表过滤视图（分组范围切换、条目换组与分组删除后调用）。
+    /// </summary>
+    private void RefreshItemsView()
+    {
+        itemsView.Refresh();
+    }
+
+    /// <summary>
+    /// 列表过滤谓词：未选分组范围（「全部」）时放行全部条目，选中分组时只放行该分组条目。
+    /// </summary>
+    /// <param name="item">待判定的列表条目。</param>
+    /// <returns>该条目应显示在列表中时为 true。</returns>
+    private bool FiltersEntryBySelectedGroup(object item)
+    {
+        if (SelectedGroup is null)
+        {
+            return true;
+        }
+
+        return item is PackageEntryViewModel entry
+            && string.Equals(entry.GroupId, SelectedGroup.Id, StringComparison.Ordinal);
     }
 
     /// <summary>
