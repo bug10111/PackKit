@@ -1,0 +1,29 @@
+# ===== .NET 构建产物（NET新项目工程纪律强制忽略类）=====
+bin/
+obj/
+.vs/
+**/publish/
+out/
+dist/
+*.user
+
+# ===== 前端/工具链产物（工程纪律强制类；当前无前端工程，按标准全量落入）=====
+node_modules/
+.vite/
+
+# ===== 运行态 =====
+logs/
+*.log
+
+# ===== 数据目录（根锚定，防止误伤源码 Data/ 目录）=====
+/data/
+
+# ===== IDE/AI 工具态 =====
+.idea/
+.vscode/
+
+# ===== 本项目特有再生产物 =====
+# demo 演示成品 exe：由 demo/SfxDemo/build-demo.ps1 打包生成，可随时重跑脚本再生
+demo/SfxDemo-packed.exe
+# demo 夹具（blob.bin/readme.txt）：由 build-demo.ps1 本地生成，可再生，源夹具无手工维护件
+demo/fixtures/

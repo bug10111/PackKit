@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>PackKit.Builder</RootNamespace>
+    <AssemblyName>PackKit.Builder</AssemblyName>
+    <ApplicationIcon>..\..\assets\sp.ico</ApplicationIcon>
+    <!-- 离线构建环境（远程 NuGet 源不可达，包经本地缓存供给），漏洞审计数据拉取失败会以 NU1900 污染编译警告门；包版本已锁定，关闭审计判定 -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\assets\sp.ico">
+      <Link>Assets\sp.ico</Link>
+    </Resource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="4.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PackKit.Core\PackKit.Core.csproj" />
+  </ItemGroup>
+
+</Project>

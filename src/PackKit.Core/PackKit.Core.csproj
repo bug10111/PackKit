@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>PackKit.Core</RootNamespace>
+    <!-- 离线构建环境（远程 NuGet 源不可达，包经本地缓存供给）：关闭还原期漏洞审计联网拉取，避免 NU1900 污染编译警告门 -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+</Project>

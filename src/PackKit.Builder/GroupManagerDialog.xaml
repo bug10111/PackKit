@@ -1,0 +1,104 @@
+<ui:FluentWindow x:Class="PackKit.Builder.GroupManagerDialog"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="分组管理"
+                 Width="460"
+                 SizeToContent="Height"
+                 ResizeMode="NoResize"
+                 ShowInTaskbar="False"
+                 WindowStartupLocation="CenterOwner"
+                 ExtendsContentIntoTitleBar="True">
+
+    <Grid Margin="16,0,16,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0"
+                     Title="分组管理"
+                     ShowMaximize="False"
+                     ShowMinimize="False"
+                     Padding="0,4,0,8" />
+
+        <TextBlock Grid.Row="1"
+                   Text="分组随工程保存并写入成品，成品端左栏按分组过滤安装包；分组顺序即下方列表顺序。"
+                   FontSize="{StaticResource CaptionFontSize}"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,8" />
+
+        <ListBox Grid.Row="2"
+                 x:Name="GroupsList"
+                 ItemsSource="{Binding Groups, Mode=OneWay}"
+                 DisplayMemberPath="Name"
+                 MinHeight="140"
+                 MaxHeight="240"
+                 SelectionChanged="OnGroupSelectionChanged" />
+
+        <Grid Grid.Row="3" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="名称：" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <ui:TextBox Grid.Column="1"
+                        x:Name="GroupNameBox"
+                        MaxLength="50"
+                        PlaceholderText="输入新分组名，或选中分组后修改" />
+        </Grid>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,12,0,0">
+            <ui:Button Content="新建"
+                       Appearance="Primary"
+                       Icon="{ui:SymbolIcon Add24}"
+                       Click="OnCreateClick" />
+            <ui:Button Content="重命名"
+                       Appearance="Secondary"
+                       Icon="{ui:SymbolIcon Edit24}"
+                       x:Name="RenameButton"
+                       Click="OnRenameClick"
+                       Margin="8,0,0,0" />
+            <ui:Button Content="删除"
+                       Appearance="Danger"
+                       Icon="{ui:SymbolIcon Delete24}"
+                       x:Name="DeleteButton"
+                       Click="OnDeleteClick"
+                       Margin="8,0,0,0" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,8,0,0">
+            <ui:Button Content="上移"
+                       Appearance="Secondary"
+                       Icon="{ui:SymbolIcon ArrowUp24}"
+                       x:Name="MoveUpButton"
+                       Click="OnMoveUpClick" />
+            <ui:Button Content="下移"
+                       Appearance="Secondary"
+                       Icon="{ui:SymbolIcon ArrowDown24}"
+                       x:Name="MoveDownButton"
+                       Click="OnMoveDownClick"
+                       Margin="8,0,0,0" />
+            <TextBlock Text="删除分组不会删除安装包，仅回落为未分组。"
+                       FontSize="{StaticResource CaptionFontSize}"
+                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                       VerticalAlignment="Center"
+                       Margin="16,0,0,0" />
+        </StackPanel>
+
+        <ui:Button Grid.Row="6"
+                   Content="关闭"
+                   Appearance="Secondary"
+                   MinWidth="88"
+                   HorizontalAlignment="Right"
+                   IsCancel="True"
+                   Click="OnCloseClick"
+                   Margin="0,16,0,0" />
+    </Grid>
+</ui:FluentWindow>

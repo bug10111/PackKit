@@ -1,0 +1,15 @@
+# 行尾统一：Windows 专属项目（WPF/win-x64），源码与工程文件统一 CRLF，防跨编辑器行尾漂移
+*.cs   text eol=crlf
+*.csproj text eol=crlf
+*.sln  text eol=crlf
+*.xaml text eol=crlf
+*.ps1  text eol=crlf
+*.manifest text eol=crlf
+*.md   text eol=crlf
+
+# 二进制类型标注：禁止 git 行尾/差异处理污染二进制内容
+*.ico  binary
+*.exe  binary
+*.dll  binary
+*.bin  binary
+*.zip  binary
