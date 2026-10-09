@@ -78,7 +78,8 @@ $publishArgs = @(
     "-r", "win-x64",
     "--self-contained", "$selfContainedEffective",
     "-p:PublishSingleFile=true",
-    "-p:IncludeNativeLibrariesForSelfExtract=true"
+    "-p:IncludeNativeLibrariesForSelfExtract=true",
+    "-p:EnableCompressionInSingleFile=true"
 )
 
 # 发布到进程级临时目录，整备时只挑入口 exe 进交付目录（旧 pdb 等附属产物一律不进交付物）
